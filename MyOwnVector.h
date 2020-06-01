@@ -7,8 +7,13 @@ namespace MY {
 	class vector_iterator {
 	public:
 		friend class MyOwnVector<T>;
+		using iterator_category = std::random_access_iterator_tag;
+		using value_type = T;
+		using reference = T&;
+		using pointer = T*;
+		using difference_type = int;
 
-		vector_iterator() = default;
+		vector_iterator():my_elem(nullptr) {}
 		vector_iterator(const vector_iterator<T>& iterator) :my_elem(iterator.my_elem) {}
 		vector_iterator& operator=(const vector_iterator<T>& iterator) {
 			my_elem = iterator->my_elem;
@@ -19,23 +24,26 @@ namespace MY {
 			return *this;
 		}
 		vector_iterator& operator++(int) {
-			vector_iterator<T>* tmp = new vector_iterator<T>(*this);
+			vector_iterator<T> tmp = *this;
 			++my_elem;
-			return *tmp;
+			return tmp;
 		}
 		vector_iterator& operator--() {
 			--my_elem;
 			return *this;
 		}
 		vector_iterator& operator--(int) {
-			vector_iterator<T> tmp = this;
+			vector_iterator<T> tmp = *this;
 			--my_elem;
 			return tmp;
 		}
-		vector_iterator& operator+(int n) {
+		friend vector_iterator& operator+(const vector_iterator& it, int n) {
 			return vector_iterator<T>(my_elem + n);
 		}
-		vector_iterator& operator-(int n) {
+		friend vector_iterator& operator+(int n, const vector_iterator& it) {
+			return vector_iterator<T>(my_elem + n);
+		}
+		friend vector_iterator& operator-(const vector_iterator& it, int n) {
 			return vector_iterator<T>(my_elem - n);
 		}
 		vector_iterator& operator+=(int n) {
@@ -47,37 +55,37 @@ namespace MY {
 			return *this;
 		}
 
-		bool operator==(const vector_iterator<T>& iterator) {
-			return my_elem == iterator.my_elem;
+		friend bool operator==(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem == iterator2.my_elem;
 		}
-		bool operator!=(const vector_iterator<T>& iterator) {
-			return my_elem != iterator.my_elem;
+		friend bool operator!=(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem != iterator2.my_elem;
 		}
-		bool operator>(const vector_iterator<T>& iterator) {
-			return my_elem > iterator.my_elem;
+		friend bool operator>=(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem >= iterator2.my_elem;
 		}
-		bool operator<(const vector_iterator<T>& iterator) {
-			return my_elem < iterator.my_elem;
+		friend bool operator<=(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem <= iterator2.my_elem;
 		}
-		bool operator>=(const vector_iterator<T>& iterator) {
-			return my_elem >= iterator.my_elem;
+		friend bool operator>(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem > iterator2.my_elem;
 		}
-		bool operator<=(const vector_iterator<T>& iterator) {
-			return my_elem <= iterator.my_elem;
+		friend bool operator<(const vector_iterator<T>& iterator, const vector_iterator<T>& iterator2) {
+			return iterator.my_elem < iterator2.my_elem;
 		}
 
-		T& operator*() {
+		reference operator*() {
 			return *my_elem;
 		}
-		T* operator->() {
+		pointer operator->() {
 			return my_elem;
 		}
 
-		int operator-(const vector_iterator& iterator) {
+		int operator-(const vector_iterator<T>& iterator) {
 			return my_elem - iterator.my_elem;
 		}
-		T& operator[](int n) {
-			return (*(my_elem+n));
+		reference operator[](int n) {
+			return my_elem[n];
 		}
 
 	private:	
@@ -90,6 +98,9 @@ namespace MY {
 	class MyOwnVector
 	{
 	public:
+
+		using iterator = vector_iterator<T>;
+
 		MyOwnVector() :my_size(0), my_capacity(0), my_data(nullptr) {};
 		MyOwnVector(std::size_t size, const T& value) :my_capacity(size), my_size(size), my_data(static_cast<T*>(operator new (size * sizeof(T)))) {
 			for (std::size_t i = 0; i < size; i++) {
@@ -161,6 +172,12 @@ namespace MY {
 		void push_back(T&& elem) {
 			push_back_forwarding(std::move(elem));
 		}
+		void insert(int position, const T& elem) {
+			insert_forwarding(position, elem);
+		}
+		void insert(int position, T&& elem) {
+			insert_forwarding(position, std::move(elem));
+		}
 
 		void pop_back() {
 			(my_data + my_size)->~T();
@@ -189,7 +206,7 @@ namespace MY {
 			if (size > this->my_size) {
 				reserve(size);
 				for (std::size_t i = my_size; i < size; i++) {
-					new(my_data + i)T(std::move(value));
+					new(my_data + i)T(value);
 				}
 			}
 			my_size = size;
@@ -218,14 +235,11 @@ namespace MY {
 		bool empty() {
 			return (my_size == 0);
 		}
-		const T* begin() {
-			return const_cast<const T*>(my_data);
+		vector_iterator<T>& begin() {
+			return *(new vector_iterator<T>(my_data));
 		}
-		const T* end() {
-			return const_cast<const T*>(my_data + my_size);
-		}
-		vector_iterator<T>& get_iterator() {
-			return *(new vector_iterator<T>(begin()));
+		vector_iterator<T>& end() {
+			return *(new vector_iterator<T>(my_data+my_size));
 		}
 	private:
 		std::size_t my_capacity;
@@ -239,6 +253,23 @@ namespace MY {
 			}
 			new(my_data + my_size)T(std::forward<U>(elem));
 			++my_size;
+		}
+		template<typename U>
+		void insert_forwarding(std::size_t index, U&& elem) {
+			if (index >= my_size) {
+				throw(std::out_of_range("Index out of range\n"));
+			}
+			if (my_capacity == my_size) {
+				std::size_t temp_capacity = my_capacity == 0 ? 1 : my_capacity * 2;
+				reserve(temp_capacity);
+			}
+			if (my_size != 0) {
+				new(my_data + my_size)T(std::move(my_data[my_size - 1]));
+				for (std::size_t i = my_size - 1; i > index; i--) {
+					my_data[i] = std::move(my_data[i - 1]);
+				}
+			}
+			new(my_data + index)T(std::forward<U>(elem));
 		}
 	};
 }
