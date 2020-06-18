@@ -121,6 +121,7 @@ namespace MY {
 			std::size_t i = 0;
 			for (auto& x : list) {
 				new(my_data + i)T(x);
+				i++;
 			}
 		}
 		~MyOwnVector() {
